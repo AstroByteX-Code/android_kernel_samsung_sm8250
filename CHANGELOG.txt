@@ -1,0 +1,6 @@
+Imported latest xxksu (32558)
+Added nomount driver (install the module from https://github.com/maxsteeel/nomount/releases/latest)
+Backported frequency-invariance engine from 5.15 (which was also backported from tensor) for better frequency selection
+Improved schedutil frequency boosting
+Switched to uclamp for more efficient boosting
+Switched to PELT scheduling for better efficiency
