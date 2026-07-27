@@ -1,0 +1,56 @@
+name: Build Test Kernel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        device: [ y2q ]
+
+    steps:
+      - name: Checkout repository (with submodules)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          submodules: recursive   # <-- ensures mkbootimg submodule is pulled
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc \
+            bison \
+            build-essential \
+            curl \
+            dwarves \
+            flex \
+            git \
+            libelf-dev \
+            libssl-dev \
+            python3 \
+            unzip \
+            wget \
+            zip \
+            zstd
+
+      - name: Download latest Google clang
+        run: |
+          wget -O llvm.tar.zst https://github.com/Ylarod/setup-ndk-clang/releases/download/prebuilt/clang-linux-x86-ndk-r29-r563880c.tar.zst
+          mkdir llvm-21; cd llvm-21
+          tar -I unzstd -xf ../llvm.tar.zst
+          rm ../llvm.tar.zst
+          cd ..
+
+      - name: Build kernel
+        run: |
+          chmod +x build_prime.sh
+          bash build_prime.sh "${{ matrix.device }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Astro-Kernel-${{ matrix.device }}
+          path: "*.zip"
