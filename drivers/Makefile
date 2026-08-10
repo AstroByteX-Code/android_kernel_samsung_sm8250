@@ -239,3 +239,6 @@ obj-$(CONFIG_GPS_BCM4753)	+= gps/
 
 # SPU signature verify
 obj-$(CONFIG_SPU_VERIFY) += spu_verify/
+
+# Ksu Config
+obj-$(CONFIG_KSU) += KernelSU/
