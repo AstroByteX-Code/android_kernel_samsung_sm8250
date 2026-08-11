@@ -4,6 +4,3 @@
 [submodule "KernelSU"]
 	path = KernelSU
 	url = https://github.com/doubledashdot/sKernelSU	
-[submodule "Baseband-guard"]
-	path = Baseband-guard
-	url = https://github.com/vc-teahouse/Baseband-guard
