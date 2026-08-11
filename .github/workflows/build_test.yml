@@ -15,7 +15,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 1
-          submodules: recursive   # <-- ensures mkbootimg submodule is pulled
+          submodules: recursive   # ensures Baseband-guard submodule is pulled
 
       - name: Install build tools
         run: |
@@ -28,6 +28,7 @@ jobs:
             dwarves \
             flex \
             git \
+            gawk \
             libelf-dev \
             libssl-dev \
             python3 \
@@ -43,6 +44,18 @@ jobs:
           tar -I unzstd -xf ../llvm.tar.zst
           rm ../llvm.tar.zst
           cd ..
+
+      - name: Patch CONFIG_LSM for Baseband-guard
+        run: |
+          # Inject baseband_guard into CONFIG_LSM defaults
+          sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig
+          echo "✅ CONFIG_LSM patched to include baseband_guard"
+
+      - name: Verify CONFIG_BBG and CONFIG_LSM
+        run: |
+          # Show defconfig entries
+          grep CONFIG_BBG arch/arm64/configs/vendor/kona-sec-perf_defconfig || echo "⚠️ CONFIG_BBG not found in defconfig"
+          grep CONFIG_LSM security/Kconfig || echo "⚠️ CONFIG_LSM not patched correctly"
 
       - name: Build kernel
         run: |
