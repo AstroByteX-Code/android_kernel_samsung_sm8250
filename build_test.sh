@@ -18,11 +18,6 @@ build_kernel() {
     cat arch/arm64/configs/vendor/kona-sec-perf_defconfig arch/arm64/configs/vendor/samsung/$DEVICE.config \
         arch/arm64/configs/ksu.config > arch/arm64/configs/temp_defconfig
 
-    echo "
-CONFIG_THINLTO=y
-# CONFIG_LTO_NONE is not set
-CONFIG_LTO_CLANG=y
-
 CONFIG_LOCALVERSION="-AstroForge"
     " >> arch/arm64/configs/temp_defconfig
 
