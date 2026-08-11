@@ -2,55 +2,99 @@ name: Build Test Kernel
 
 on:
   workflow_dispatch:
+    inputs:
+      toolchain:
+        description: "Toolchain (llvm-mingw, google-ndk, llvm-22.1.8, llvm-23.1.0-rc2)"
+        required: false
+        default: "google-ndk"
 
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        device: [ y2q ]
+        device:
+          - { name: x1q, name2: x1qxx, name3: x1qxxx }
+          - { name: y2q, name2: y2qxx, name3: y2qxxx }
+          - { name: z3q, name2: z3qxx, name3: z3qxxx }
 
     steps:
       - name: Checkout repository (with submodules)
         uses: actions/checkout@v5
         with:
           fetch-depth: 1
-          submodules: recursive   # <-- ensures mkbootimg submodule is pulled
+          submodules: recursive
 
       - name: Install build tools
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            bc \
-            bison \
-            build-essential \
-            curl \
-            dwarves \
-            flex \
-            git \
-            libelf-dev \
-            libssl-dev \
-            python3 \
-            unzip \
-            wget \
-            zip \
-            zstd
+            build-essential bc bison flex libssl-dev \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi \
+            binutils-aarch64-linux-gnu \
+            python3 adb zip curl xz-utils \
+            llvm lld dwarves git unzip wget zstd
 
-      - name: Download latest Google clang
+      - name: Download selected toolchain
         run: |
-          wget -O llvm.tar.zst https://github.com/Ylarod/setup-ndk-clang/releases/download/prebuilt/clang-linux-x86-ndk-r29-r563880c.tar.zst
-          mkdir llvm-21; cd llvm-21
-          tar -I unzstd -xf ../llvm.tar.zst
-          rm ../llvm.tar.zst
-          cd ..
+          ROOT_DIR="$(pwd)"
+          TOOLCHAIN_DIR="$ROOT_DIR/toolchains"
+          mkdir -p "$TOOLCHAIN_DIR"
+
+          case "${{ github.event.inputs.toolchain }}" in
+            llvm-mingw)
+              echo "Downloading llvm-mingw..."
+              CLANG_TARBALL="llvm-mingw-20260728-ucrt-ubuntu-22.04-x86_64.tar.xz"
+              CLANG_URL="https://github.com/mstorsjo/llvm-mingw/releases/download/20260728/$CLANG_TARBALL"
+              TC_DIR="$TOOLCHAIN_DIR/llvm-mingw-20260728-ucrt-ubuntu-22.04-x86_64"
+              wget -O "$TOOLCHAIN_DIR/$CLANG_TARBALL" "$CLANG_URL"
+              tar -xf "$TOOLCHAIN_DIR/$CLANG_TARBALL" -C "$TOOLCHAIN_DIR"
+              rm "$TOOLCHAIN_DIR/$CLANG_TARBALL"
+              ;;
+            google-ndk)
+              echo "Downloading Google NDK Clang r29..."
+              CLANG_TARBALL="clang-linux-x86-ndk-r29-r563880c.tar.zst"
+              CLANG_URL="https://github.com/Ylarod/setup-ndk-clang/releases/download/prebuilt/$CLANG_TARBALL"
+              TC_DIR="$TOOLCHAIN_DIR/llvm-ndk-r29"
+              wget -O "$TOOLCHAIN_DIR/$CLANG_TARBALL" "$CLANG_URL"
+              mkdir -p "$TC_DIR"
+              tar -I unzstd -xf "$TOOLCHAIN_DIR/$CLANG_TARBALL" -C "$TC_DIR" --strip-components=1
+              rm "$TOOLCHAIN_DIR/$CLANG_TARBALL"
+              ;;
+            llvm-22.1.8)
+              echo "Downloading official LLVM 22.1.8..."
+              CLANG_VERSION="22.1.8"
+              CLANG_TARBALL="LLVM-${CLANG_VERSION}-Linux-X64.tar.xz"
+              CLANG_URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-${CLANG_VERSION}/${CLANG_TARBALL}"
+              TC_DIR="$TOOLCHAIN_DIR/LLVM-${CLANG_VERSION}-Linux-X64"
+              wget -O "$TOOLCHAIN_DIR/$CLANG_TARBALL" "$CLANG_URL"
+              tar -xf "$TOOLCHAIN_DIR/$CLANG_TARBALL" -C "$TOOLCHAIN_DIR"
+              rm "$TOOLCHAIN_DIR/$CLANG_TARBALL"
+              ;;
+            *)
+              echo "Downloading official LLVM 23.1.0-rc2..."
+              CLANG_VERSION="23.1.0-rc2"
+              CLANG_TARBALL="llvm-project-23.1.0-rc2.src.tar.xz"
+              CLANG_URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-${CLANG_VERSION}/${CLANG_TARBALL}"
+              TC_DIR="$TOOLCHAIN_DIR/LLVM-${CLANG_VERSION}-Linux-X64"
+              wget -O "$TOOLCHAIN_DIR/$CLANG_TARBALL" "$CLANG_URL"
+              tar -xf "$TOOLCHAIN_DIR/$CLANG_TARBALL" -C "$TOOLCHAIN_DIR"
+              rm "$TOOLCHAIN_DIR/$CLANG_TARBALL"
+              ;;
+          esac
+
+          echo "TOOLCHAIN_DIR=$TC_DIR" >> $GITHUB_ENV
 
       - name: Build kernel
         run: |
           chmod +x build_prime.sh
-          bash build_prime.sh "${{ matrix.device }}"
+          bash build_prime.sh \
+            "${{ matrix.device.name }}" \
+            "${{ matrix.device.name2 }}" \
+            "${{ matrix.device.name3 }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Astro-Kernel-${{ matrix.device }}
-          path: "*.zip"
+          name: Astro-Kernel-${{ matrix.device.name }}
+          path: AnyKernel3/*.zip
