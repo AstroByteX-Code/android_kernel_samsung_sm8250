@@ -20,12 +20,15 @@ build_kernel() {
     export ARCH=arm64
     mkdir -p out
 
-    BUILD_VAR="-j$(nproc) -C $(pwd) O=$(pwd)/out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 LLVM_IAS=1"
+    BUILD_VAR="-j$(nproc) -C $(pwd) O=$(pwd)/out ARCH=arm64 \
+        CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 LLVM_IAS=1"
 
+    # Merge defconfigs
     cat arch/arm64/configs/vendor/kona-sec-perf_defconfig \
         arch/arm64/configs/vendor/samsung/$DEVICE.config \
         arch/arm64/configs/ksu.config > arch/arm64/configs/temp_defconfig
 
+    # Append local version string
     echo "CONFIG_LOCALVERSION=\"-AstroForge-${BUILD_DATE}\"" >> arch/arm64/configs/temp_defconfig
     echo 'CONFIG_LTO_CLANG=y' >> arch/arm64/configs/temp_defconfig
     echo 'CONFIG_THINLTO=y' >> arch/arm64/configs/temp_defconfig
@@ -55,8 +58,21 @@ build_dtbo() {
 
 prepare_ak3() {
     cd AnyKernel3/
+
     mv "$KERNEL_DIR/out/dtbo.img" dtbo.img
-    mv "$KERNEL_DIR/out/arch/arm64/boot/Image.gz-dtb" Image.gz-dtb
+
+    # Handle kernel image variations
+    if [ -f "$KERNEL_DIR/out/arch/arm64/boot/Image-dtb" ]; then
+        mv "$KERNEL_DIR/out/arch/arm64/boot/Image-dtb" Image-dtb
+    elif [ -f "$KERNEL_DIR/out/arch/arm64/boot/Image.gz-dtb" ]; then
+        mv "$KERNEL_DIR/out/arch/arm64/boot/Image.gz-dtb" Image.gz-dtb
+    elif [ -f "$KERNEL_DIR/out/arch/arm64/boot/Image" ]; then
+        mv "$KERNEL_DIR/out/arch/arm64/boot/Image" Image
+    else
+        echo "ERROR: No kernel image found!"
+        exit 1
+    fi
+
     mv "$KERNEL_DIR/out/arch/arm64/boot/dts/dtb" dtb
 
     sed -i "s/^device\.name1=.*/device.name1=${DEVICE}/" anykernel.sh
