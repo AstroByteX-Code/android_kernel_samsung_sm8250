@@ -105,4 +105,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Astro-Kernel-${{ matrix.device.name }}-${{ env.TOOLCHAIN_NAME }}
-          path: AnyKernel3/Astro-Kernel-${{ matrix.device.name }}-${{ env.TOOLCHAIN_NAME }}.zip
+          path: AnyKernel3/Astro-Kernel-${{ matrix.device.name }}-${{ env.TOOLCHAIN_NAME }}-*.zip
+
