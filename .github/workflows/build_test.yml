@@ -2,68 +2,107 @@ name: Build Test Kernel
 
 on:
   workflow_dispatch:
+    inputs:
+      toolchain:
+        description: "Toolchain (llvm-mingw, google-ndk, llvm-22.1.8, llvm-23.1.0-rc2, neutron-clang)"
+        required: false
+        default: "google-ndk"
 
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        device: [ y2q ]
+        device:
+          - { name: y2q, name2: y2qxx, name3: y2qxxx }
 
     steps:
       - name: Checkout repository (with submodules)
         uses: actions/checkout@v5
         with:
           fetch-depth: 1
-          submodules: recursive   # ensures Baseband-guard submodule is pulled
+          submodules: recursive
 
       - name: Install build tools
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            bc \
-            bison \
-            build-essential \
-            curl \
-            dwarves \
-            flex \
-            git \
-            gawk \
-            libelf-dev \
-            libssl-dev \
-            python3 \
-            unzip \
-            wget \
-            zip \
-            zstd
+            build-essential bc bison flex libssl-dev \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi \
+            binutils-aarch64-linux-gnu \
+            python3 adb zip curl xz-utils \
+            llvm lld dwarves git unzip wget zstd jq ccache
 
-      - name: Download latest Google clang
+      - name: Download selected toolchain
         run: |
-          wget -O llvm.tar.zst https://github.com/Ylarod/setup-ndk-clang/releases/download/prebuilt/clang-linux-x86-ndk-r29-r563880c.tar.zst
-          mkdir llvm-21; cd llvm-21
-          tar -I unzstd -xf ../llvm.tar.zst
-          rm ../llvm.tar.zst
-          cd ..
+          ROOT_DIR="$(pwd)"
+          TOOLCHAIN_DIR="$ROOT_DIR/toolchains"
+          mkdir -p "$TOOLCHAIN_DIR"
 
-      - name: Patch CONFIG_LSM for Baseband-guard
-        run: |
-          # Inject baseband_guard into CONFIG_LSM defaults
-          sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig
-          echo "✅ CONFIG_LSM patched to include baseband_guard"
+          case "${{ github.event.inputs.toolchain }}" in
+            llvm-mingw)
+              TOOLCHAIN_NAME="llvm-mingw"
+              CLANG_TARBALL="llvm-mingw-20260728-ucrt-ubuntu-22.04-x86_64.tar.xz"
+              CLANG_URL="https://github.com/mstorsjo/llvm-mingw/releases/download/20260728/$CLANG_TARBALL"
+              ;;
+            google-ndk)
+              TOOLCHAIN_NAME="google-ndk"
+              CLANG_TARBALL="clang-linux-x86-ndk-r29-r563880c.tar.zst"
+              CLANG_URL="https://github.com/Ylarod/setup-ndk-clang/releases/download/prebuilt/$CLANG_TARBALL"
+              ;;
+            llvm-22.1.8)
+              TOOLCHAIN_NAME="llvm-22.1.8"
+              CLANG_TARBALL="LLVM-22.1.8-Linux-X64.tar.xz"
+              CLANG_URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/$CLANG_TARBALL"
+              ;;
+            llvm-23.1.0-rc2)
+              TOOLCHAIN_NAME="llvm-23.1.0-rc2"
+              CLANG_TARBALL="llvm-project-23.1.0-rc2.src.tar.xz"
+              CLANG_URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.0-rc2/$CLANG_TARBALL"
+              ;;
+            neutron-clang)
+              TOOLCHAIN_NAME="neutron-clang"
+              TC_DIR="$TOOLCHAIN_DIR/$TOOLCHAIN_NAME"
+              if ! [ -d "$TC_DIR" ]; then
+                echo "Clang not found! Downloading Neutron Clang..."
+                mkdir -p "$TC_DIR"
+                ASSET_URL=$(
+                  curl -fsSL https://api.github.com/repos/Neutron-Toolchains/clang-build-catalogue/releases/latest |
+                  jq -r '.assets[] | select(.name | endswith(".tar.zst")) | .browser_download_url' |
+                  head -n1
+                )
+                if [ -z "$ASSET_URL" ]; then
+                  echo "Failed to find latest Neutron Clang release!"
+                  exit 1
+                fi
+                if ! curl -L "$ASSET_URL" | tar --zstd -x -C "$TC_DIR" --strip-components=1; then
+                  echo "Download failed!"
+                  exit 1
+                fi
+                echo "Neutron Clang ready!"
+              fi
+              ;;
+            *)
+              echo "Unknown toolchain option!"
+              exit 1
+              ;;
+          esac
 
-      - name: Verify CONFIG_BBG and CONFIG_LSM
-        run: |
-          # Show defconfig entries
-          grep CONFIG_BBG arch/arm64/configs/vendor/kona-sec-perf_defconfig || echo "⚠️ CONFIG_BBG not found in defconfig"
-          grep CONFIG_LSM security/Kconfig || echo "⚠️ CONFIG_LSM not patched correctly"
+          TC_DIR="$TOOLCHAIN_DIR/$TOOLCHAIN_NAME"
+          echo "TOOLCHAIN_DIR=$TC_DIR" >> $GITHUB_ENV
+          echo "TOOLCHAIN_NAME=$TOOLCHAIN_NAME" >> $GITHUB_ENV
 
       - name: Build kernel
         run: |
           chmod +x build_test.sh
-          bash build_test.sh "${{ matrix.device }}"
+          bash build_test.sh \
+            "${{ matrix.device.name }}" \
+            "${{ matrix.device.name2 }}" \
+            "${{ matrix.device.name3 }}" \
+            "$TOOLCHAIN_DIR/$TOOLCHAIN_NAME"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Astro-Kernel-${{ matrix.device }}
-          path: "*.zip"
+          name: Astro-Kernel-${{ matrix.device.name }}-${{ env.TOOLCHAIN_NAME }}
+          path: AnyKernel3/Astro-Kernel-${{ matrix.device.name }}-${{ env.TOOLCHAIN_NAME }}.zip
