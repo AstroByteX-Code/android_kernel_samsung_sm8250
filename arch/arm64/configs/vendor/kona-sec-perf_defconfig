@@ -1,5 +1,6 @@
 CONFIG_FAKE_UNAME_5_10=y
 CONFIG_LOCALVERSION="-AstroForge"
+CONFIG_CC_VERSION_TEXT="ClangBuiltLinux clang version 23.1.0-rc2 (https://github.com/llvm/llvm-project.git)"
 CONFIG_AUDIT=y
 CONFIG_NO_HZ=y
 CONFIG_HIGH_RES_TIMERS=y
