@@ -13,8 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        device:
-          - { name: y2q, name2: y2qxx, name3: y2qxxx }
+        device: [ y2q ]
+          
 
     steps:
       - name: Checkout repository (with submodules)
@@ -96,14 +96,12 @@ jobs:
         run: |
           chmod +x build_test.sh
           bash build_test.sh \
-            "${{ matrix.device.name }}" \
-            "${{ matrix.device.name2 }}" \
-            "${{ matrix.device.name3 }}" \
+            "${{ matrix.device }}" \
             "$TOOLCHAIN_DIR/$TOOLCHAIN_NAME"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Astro-Kernel-${{ matrix.device.name }}-${{ env.TOOLCHAIN_NAME }}
-          path: AnyKernel3/Astro-Kernel-${{ matrix.device.name }}-${{ env.TOOLCHAIN_NAME }}-*.zip
+          name: Astro-Kernel-${{ matrix.device }}-${{ env.TOOLCHAIN_NAME }}
+          path: AnyKernel3/Astro-Kernel-${{ matrix.device }}-${{ env.TOOLCHAIN_NAME }}-*.zip
 
