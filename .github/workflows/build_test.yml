@@ -14,7 +14,6 @@ jobs:
     strategy:
       matrix:
         device: [ y2q ]
-          
 
     steps:
       - name: Checkout repository (with submodules)
@@ -100,8 +99,7 @@ jobs:
             "$TOOLCHAIN_DIR/$TOOLCHAIN_NAME"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: Astro-Kernel-${{ matrix.device }}-${{ env.TOOLCHAIN_NAME }}
-          path: AnyKernel3/Astro-Kernel-${{ matrix.device }}-${{ env.TOOLCHAIN_NAME }}-*.zip
-
+          path: Astro-Kernel-${{ matrix.device }}-${{ env.TOOLCHAIN_NAME }}-*.zip
