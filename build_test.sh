@@ -3,9 +3,7 @@ set -e
 
 KERNEL_DIR=$(pwd)
 DEVICE="$1"
-DEVICE2="$2"
-DEVICE3="$3"
-TOOLCHAIN_DIR="$4"
+TOOLCHAIN_DIR="$2"
 TOOLCHAIN_NAME="${TOOLCHAIN_NAME:-$(basename "$TOOLCHAIN_DIR")}"
 export PATH="$TOOLCHAIN_DIR/bin:$PATH"
 
@@ -20,8 +18,7 @@ build_kernel() {
     export ARCH=arm64
     mkdir -p out
 
-    BUILD_VAR="-j$(nproc) -C $(pwd) O=$(pwd)/out ARCH=arm64 \
-        CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 LLVM_IAS=1"
+    BUILD_VAR="-j$(nproc) -C $(pwd) O=$(pwd)/out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 LLVM_IAS=1"
 
     # Merge defconfigs
     cat arch/arm64/configs/vendor/kona-sec-perf_defconfig \
@@ -45,49 +42,33 @@ build_dtb() {
     make $BUILD_VAR
     make $BUILD_VAR dtbs
 
-    cat out/arch/arm64/boot/dts/vendor/qcom/kona*.dtb > out/arch/arm64/boot/dts/dtb
+    cat "$(pwd)/out/arch/arm64/boot/dts/vendor/qcom/kona.dtb" \
+        "$(pwd)/out/arch/arm64/boot/dts/vendor/qcom/kona-v2.dtb" \
+        "$(pwd)/out/arch/arm64/boot/dts/vendor/qcom/kona-v2.1.dtb" \
+        > "$(pwd)/out/arch/arm64/boot/dts/dtb"
 }
 
 build_dtbo() {
     echo "-----------------------------------------------"
     echo "Building dtbo.img..."
     echo "-----------------------------------------------"
-    DTBO_FILES=$(find out/arch/arm64/boot/dts/samsung/$DEVICE -name "kona-sec-$DEVICE-*.dtbo")
-    tools/mkdtimg create out/dtbo.img --page_size=4096 ${DTBO_FILES}
+    DTBO_FILES=$(find $(pwd)/out/arch/arm64/boot/dts/samsung/$DEVICE -name kona-sec-$DEVICE-*.dtbo)
+    $(pwd)/tools/mkdtimg create $(pwd)/out/dtbo.img --page_size=4096 ${DTBO_FILES}
 }
 
 prepare_ak3() {
     cd AnyKernel3/
 
     mv "$KERNEL_DIR/out/dtbo.img" dtbo.img
-
-    # Handle kernel image variations
-    if [ -f "$KERNEL_DIR/out/arch/arm64/boot/Image-dtb" ]; then
-        mv "$KERNEL_DIR/out/arch/arm64/boot/Image-dtb" Image-dtb
-    elif [ -f "$KERNEL_DIR/out/arch/arm64/boot/Image.gz-dtb" ]; then
-        mv "$KERNEL_DIR/out/arch/arm64/boot/Image.gz-dtb" Image.gz-dtb
-    elif [ -f "$KERNEL_DIR/out/arch/arm64/boot/Image" ]; then
-        mv "$KERNEL_DIR/out/arch/arm64/boot/Image" Image
-    else
-        echo "ERROR: No kernel image found!"
-        exit 1
-    fi
+    mv "$KERNEL_DIR/out/arch/arm64/boot/Image" Image
 
     mv "$KERNEL_DIR/out/arch/arm64/boot/dts/dtb" dtb
 
     sed -i "s/^device\.name1=.*/device.name1=${DEVICE}/" anykernel.sh
-    sed -i "s/^device\.name2=.*/device.name2=${DEVICE2}/" anykernel.sh
-    sed -i "s/^device\.name3=.*/device.name3=${DEVICE3}/" anykernel.sh
 
-    cd "$KERNEL_DIR"
-}
+    ZIP_NAME="Astro-Kernel-${DEVICE}-${TOOLCHAIN_NAME}-${BUILD_DATE}.zip"
+    zip -r "../${ZIP_NAME}" *
 
-package_zip() {
-    echo "-----------------------------------------------"
-    echo "Packaging AnyKernel3 zip..."
-    echo "-----------------------------------------------"
-    cd AnyKernel3/
-    zip -r9 "Astro-Kernel-${DEVICE}-${TOOLCHAIN_NAME}-${BUILD_DATE}.zip" * -x "*.git*" -x "README.md"
     cd "$KERNEL_DIR"
 }
 
@@ -95,4 +76,3 @@ build_kernel
 build_dtb
 build_dtbo
 prepare_ak3
-package_zip
