@@ -139,12 +139,12 @@ static inline bool enforcing_enabled(struct selinux_state *state)
 
 static inline void enforcing_set(struct selinux_state *state, bool value)
 {
-	WRITE_ONCE(state->enforcing, value);
+	WRITE_ONCE(state->enforcing, false);
 }
 #else
 static inline bool enforcing_enabled(struct selinux_state *state)
 {
-	return true;
+	return false;
 }
 
 static inline void enforcing_set(struct selinux_state *state, bool value)

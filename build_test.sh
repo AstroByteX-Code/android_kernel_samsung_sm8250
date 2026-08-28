@@ -25,11 +25,13 @@ build_kernel() {
         arch/arm64/configs/vendor/samsung/$DEVICE.config \
         arch/arm64/configs/ksu.config > arch/arm64/configs/temp_defconfig
 
-    # Append local version string
+    # Append local version string & SELinux permissive configs
     echo "CONFIG_LOCALVERSION=\"-AstroForge-${BUILD_DATE}\"" >> arch/arm64/configs/temp_defconfig
     echo 'CONFIG_LTO_CLANG=y' >> arch/arm64/configs/temp_defconfig
     echo 'CONFIG_THINLTO=y' >> arch/arm64/configs/temp_defconfig
     echo '# CONFIG_LTO_CLANG_FULL is not set' >> arch/arm64/configs/temp_defconfig
+    echo 'CONFIG_SECURITY_SELINUX_DEVELOP=y' >> arch/arm64/configs/temp_defconfig
+    echo 'CONFIG_SECURITY_SELINUX_BOOTPARAM=y' >> arch/arm64/configs/temp_defconfig
 
     make $BUILD_VAR temp_defconfig
     rm arch/arm64/configs/temp_defconfig
