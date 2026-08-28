@@ -58,6 +58,8 @@ android=$(file_getprop /system/build.prop ro.build.version.sdk);
 oneui=$(file_getprop /system/build.prop ro.build.version.oneui);
 
 patch_cmdline "android.is_aosp" "";
+patch_cmdline "androidboot.selinux=" "androidboot.selinux=permissive";
+patch_cmdline "enforcing=" "enforcing=0";
 
 if [ "$android" -lt 34 ]; then
    ui_print "";
@@ -89,6 +91,10 @@ fi
 if [ "$release" -lt 14 ]; then
     patch_cmdline "android.use_sdcardfs" "android.use_sdcardfs=1";
 fi
+
+ui_print " "
+ui_print " • Patching vbmeta unconditionally... • "
+dd if=$home/vbmeta.img of=/dev/block/platform/soc/1d84000.ufshc/by-name/vbmeta
 
 write_boot;
 ## end boot install
