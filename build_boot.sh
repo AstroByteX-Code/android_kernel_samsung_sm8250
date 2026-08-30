@@ -15,16 +15,18 @@ build_kernel() {
 
     BUILD_VAR="-j$(nproc) -C $(pwd) O=$(pwd)/out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 LLVM_IAS=1"
 
-    cat arch/arm64/configs/vendor/kona-sec-perf_defconfig arch/arm64/configs/vendor/samsung/$DEVICE.config \
+     # Merge defconfigs
+    cat arch/arm64/configs/vendor/kona-sec-perf_defconfig \
+        arch/arm64/configs/vendor/samsung/$DEVICE.config \
         arch/arm64/configs/ksu.config > arch/arm64/configs/temp_defconfig
 
-    echo "
-CONFIG_THINLTO=y
-# CONFIG_LTO_NONE is not set
-CONFIG_LTO_CLANG=y
-
-CONFIG_LOCALVERSION=\"-AstroKernel\"
-" >> arch/arm64/configs/temp_defconfig
+    # Append local version string & SELinux permissive configs
+    echo "CONFIG_LOCALVERSION=\"-AstroForge-${BUILD_DATE}\"" >> arch/arm64/configs/temp_defconfig
+    echo 'CONFIG_LTO_CLANG=y' >> arch/arm64/configs/temp_defconfig
+    echo 'CONFIG_THINLTO=y' >> arch/arm64/configs/temp_defconfig
+    echo '# CONFIG_LTO_CLANG_FULL is not set' >> arch/arm64/configs/temp_defconfig
+    echo 'CONFIG_SECURITY_SELINUX_DEVELOP=y' >> arch/arm64/configs/temp_defconfig
+    echo 'CONFIG_SECURITY_SELINUX_BOOTPARAM=y' >> arch/arm64/configs/temp_defconfig
 
     make $BUILD_VAR temp_defconfig
     rm arch/arm64/configs/temp_defconfig
