@@ -11,8 +11,10 @@ MDIR := $(realpath $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 $(info -- KDIR: $(KDIR))
 $(info -- MDIR: $(MDIR))
 
-# compliant to last upstream kernel change as of e9e5b61
-CFLAGS_ksu.o += -DKSU_VERSION=32558
+# compliant to last upstream kernel change as of 32ce89f (32612, uapi 2)
+CFLAGS_ksu.o += -DKSU_VERSION=35612
+
+ccflags-y += -DKSU_VERSION_TAG=\"v3.3.0-14\"
 
 ifndef KSU_EXPECTED_SIZE
 KSU_EXPECTED_SIZE := 0x033b
@@ -96,6 +98,7 @@ endif
 
 CFLAGS_ksu.o += $(call cc-option, -Wno-declaration-after-statement)
 CFLAGS_ksu.o += $(call cc-option, -Wno-implicit-function-declaration)
+CFLAGS_ksu.o += $(call cc-option, -Wno-missing-prototypes)
 CFLAGS_ksu.o += $(call cc-option, -Wno-strict-prototypes)
 CFLAGS_ksu.o += $(call cc-option, -Wno-int-conversion)
 CFLAGS_ksu.o += $(call cc-option, -Wno-int-to-pointer-cast)
@@ -117,14 +120,42 @@ CFLAGS_ksu.o += $(call cc-option, -Wframe-larger-than=1024)
 # to make sure we can use builtins
 CFLAGS_REMOVE_ksu.o += -fno-builtin
 
+# Os to O2, we dont care for anything else. O3 vs O2 codegen on hotpath is same.
+ifeq ($(CONFIG_CC_OPTIMIZE_FOR_SIZE),y)
+CFLAGS_REMOVE_ksu.o += -Oz
+CFLAGS_REMOVE_ksu.o += -Os
+CFLAGS_ksu.o += -O2
+endif
+
+# always inline atomics
+# clang and gcc CAN try to drop a runtime C11 atomics detector
+# https://github.com/llvm/llvm-project/blob/main/llvm/test/CodeGen/AArch64/atomic-ops.ll
+# however this is problematic to us as those cannot be linked to the kernel (e.g. __aarch64_cas4_acq, __aarch64_cas4_rel)
+# so for LKM they just get plain ARMv8.0 atomics, not LSE / LSE2, even when the device is capable of LSE.
+ifeq ($(CONFIG_ARM64),y)
+CFLAGS_ksu.o += $(call cc-option, -mno-outline-atomics)
+endif
+
+# Optional: for LKM users, I recommend users to build it themselves with optimizations.
+# you can get optimized codegen especially around atomics.
+# hint: decode your own /proc/cpuinfo and check it here https://github.com/llvm/llvm-project/blob/main/llvm/lib/TargetParser/Host.cpp
+# comment it out and put your cpu / arch here
+# CFLAGS_ksu.o += -mcpu=cortex-a76 -mtune=cortex-a76
+
 ifneq ($(CONFIG_KSU_DEBUG),y)
 # strip, remove tracing / profiling
 # comment out if proper backtrace is needed
-CFLAGS_ksu.o += -O3
 CFLAGS_ksu.o += -g0 -fno-unwind-tables -fno-asynchronous-unwind-tables -fomit-frame-pointer
 CFLAGS_ksu.o += $(call cc-option, -momit-leaf-frame-pointer)
-CFLAGS_REMOVE_ksu.o = $(CC_FLAGS_FTRACE)
+
+# no profiling
+CFLAGS_REMOVE_ksu.o += $(CC_FLAGS_FTRACE)
 CFLAGS_REMOVE_ksu.o += -pg
+
+# no need for stack init
+CFLAGS_REMOVE_ksu.o += -ftrivial-auto-var-init=pattern
+CFLAGS_REMOVE_ksu.o += -ftrivial-auto-var-init=zero
+CFLAGS_REMOVE_ksu.o += -enable-trivial-auto-var-init-zero-knowing-it-will-be-removed-from-clang
 
 # if cflags can be macro'd, this will be called 'TRUST_ME'
 CFLAGS_ksu.o += -fno-stack-protector -fno-stack-check

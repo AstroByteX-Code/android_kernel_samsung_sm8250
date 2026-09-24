@@ -1,3 +1,11 @@
+#ifdef CONFIG_KSU_SUSFS
+#include <linux/namei.h>
+#include <linux/susfs.h>
+#include "objsec.h"
+
+bool susfs_is_boot_completed_triggered __read_mostly = false;
+#endif
+
 static int do_grant_root(void __user *arg)
 {
 	int ret;
@@ -89,6 +97,9 @@ static int do_report_event(void __user *arg)
 			boot_complete_lock = true;
 			pr_info("boot_complete triggered\n");
 			on_boot_completed();
+#ifdef CONFIG_KSU_SUSFS
+			susfs_start_sdcard_monitor_fn();
+#endif
 		}
 		break;
 	}
@@ -425,6 +436,7 @@ static int do_manage_mark(void __user *arg)
 
 	switch (cmd.operation) {
 		case KSU_MARK_GET: {
+#ifndef CONFIG_KSU_SUSFS
 			// on this one, we return seccomp status of a pid instead
 			// at the very least we have partial featureset
 			ret = ksu_get_task_mark(cmd.pid);
@@ -433,6 +445,15 @@ static int do_manage_mark(void __user *arg)
 			    return ret;
 			}
 			cmd.result = (u32)ret;
+#else
+			if (susfs_is_current_proc_umounted()) {
+				ret = 0;
+			} else {
+				ret = 1;
+			}
+			pr_info("manage_mark: ret for pid %d: %d\n", cmd.pid, ret);
+			cmd.result = (u32)ret;
+#endif
 			break;
 		}
 #if 0 // TODO: revisit this sometime
@@ -639,6 +660,188 @@ static int add_try_umount(void __user *arg)
 	return 0;
 }
 
+struct ksu_get_hook_mode_cmd {
+    char mode[16];
+};
+
+struct ksu_get_version_tag_cmd {
+    char tag[32];
+};
+
+#define KSU_FULL_VERSION_STRING 255
+
+// Downstream supercall struct
+struct ksu_get_full_version_cmd {
+    char version_full[KSU_FULL_VERSION_STRING]; // Output: full version string
+};
+
+struct ksu_hook_type_cmd {
+    char hook_type[32]; // Output: hook type string
+};
+
+struct ksu_manager_entry {
+    __u32 uid;
+    __u8 signature_index;
+} __attribute__((packed));
+
+struct ksu_get_managers_cmd {
+    __u16 count; // Input / Output: number of managers in array
+    __u16 total_count; // Output: total number of managers in requested list
+    struct ksu_manager_entry managers[]; // Output: Array of active manager
+} __attribute__((packed));
+
+// Downstream Kpatch, non-supported in my driver
+static const __u8 KERNEL_PATCH_NOT_FOUND = 0;
+
+struct ksu_get_kernel_patch_implement {
+    __u8 type; // Output: Current Kernel Patch Implement
+};
+
+static int do_get_hook_mode(void __user *arg)
+{
+    struct ksu_get_hook_mode_cmd cmd = {0};
+
+#ifdef CONFIG_KSU_TAMPER_SYSCALL_TABLE
+    strscpy(cmd.mode, "Syscall", sizeof(cmd.mode));
+#else
+    strscpy(cmd.mode, "Manual", sizeof(cmd.mode));
+#endif
+
+    if (copy_to_user(arg, &cmd, sizeof(cmd))) {
+        pr_err("get_hook_mode: copy_to_user failed\n");
+        return -EFAULT;
+    }
+
+    return 0;
+}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 4, 0)
+#define KSU_IOCTL_GET_HOOK_MODE \
+    _IOC(_IOC_READ, 'K', 98, 0)
+#define KSU_IOCTL_GET_VERSION_TAG \
+    _IOC(_IOC_READ, 'K', 99, 0)
+// Downstream add IOCTL command definitions
+#define KSU_IOCTL_GET_FULL_VERSION \
+    _IOC(_IOC_READ, 'K', 100, 0)
+#define KSU_IOCTL_HOOK_TYPE \
+    _IOC(_IOC_READ, 'K', 101, 0)
+// 102 = ENABLE_KPM (KernelPatch Module),deprecated
+#define KSU_IOCTL_DYNAMIC_MANAGER \
+    _IOC(_IOC_READ | _IOC_WRITE, 'K', 103, 0)
+// 104 = old get_managers, deprecated
+#define KSU_IOCTL_GET_MANAGERS \
+    _IOC(_IOC_READ | _IOC_WRITE, 'K', 105, 0)
+#define KSU_IOCTL_GET_KERNEL_PATCH_IMPLEMENT \
+    _IOC(_IOC_READ, 'K', 106, 0)
+#else
+static const __u32 KSU_IOCTL_GET_HOOK_MODE = _IOC(_IOC_READ, 'K', 98, 0);
+static const __u32 KSU_IOCTL_GET_VERSION_TAG = _IOC(_IOC_READ, 'K', 99, 0);
+// Downstream add IOCTL command definitions
+static const __u32 KSU_IOCTL_GET_FULL_VERSION = _IOC(_IOC_READ, 'K', 100, 0);
+static const __u32 KSU_IOCTL_HOOK_TYPE = _IOC(_IOC_READ, 'K', 101, 0);
+// 102 = ENABLE_KPM (KernelPatch Module),deprecated
+static const __u32 KSU_IOCTL_DYNAMIC_MANAGER = _IOC(_IOC_READ | _IOC_WRITE, 'K', 103, 0);
+// 104 = old get_managers, deprecated
+static const __u32 KSU_IOCTL_GET_MANAGERS = _IOC(_IOC_READ | _IOC_WRITE, 'K', 105, 0);
+static const __u32 KSU_IOCTL_GET_KERNEL_PATCH_IMPLEMENT = _IOC(_IOC_READ, 'K', 106, 0);
+#endif
+
+static int do_get_version_tag(void __user *arg)
+{
+    struct ksu_get_version_tag_cmd cmd = {0};
+
+    strscpy(cmd.tag, KERNEL_SU_VERSION_TAG, sizeof(cmd.tag));
+
+    if (copy_to_user(arg, &cmd, sizeof(cmd))) {
+        pr_err("get_version_tag: copy_to_user failed\n");
+        return -EFAULT;
+    }
+
+    return 0;
+}
+
+// 100. GET_FULL_VERSION - Get full version string
+static int do_get_full_version(void __user *arg)
+{
+    struct ksu_get_full_version_cmd cmd = { 0 };
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 13, 0)
+    strscpy(cmd.version_full, KSU_VERSION_FULL, sizeof(cmd.version_full));
+#else
+    strlcpy(cmd.version_full, KSU_VERSION_FULL, sizeof(cmd.version_full));
+#endif
+
+    if (copy_to_user(arg, &cmd, sizeof(cmd))) {
+        pr_err("get_full_version: copy_to_user failed\n");
+        return -EFAULT;
+    }
+
+    return 0;
+}
+
+// 101. HOOK_TYPE - Get hook type
+static int do_get_hook_type(void __user *arg)
+{
+    struct ksu_hook_type_cmd cmd = { 0 };
+#if defined(CONFIG_KSU_TAMPER_SYSCALL_TABLE)
+    const char *type = "Syscall Table Hijacking";
+#elif defined(CONFIG_KSU_KPROBES_KSUD)
+    const char *type = "Kprobes";
+#else
+    const char *type = "Manual";
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 13, 0)
+    strscpy(cmd.hook_type, type, sizeof(cmd.hook_type));
+#else
+    strlcpy(cmd.hook_type, type, sizeof(cmd.hook_type));
+#endif
+
+    if (copy_to_user(arg, &cmd, sizeof(cmd))) {
+        pr_err("get_hook_type: copy_to_user failed\n");
+        return -EFAULT;
+    }
+
+    return 0;
+}
+
+static int do_dynamic_manager(void __user *arg)
+{
+    return -EOPNOTSUPP;
+}
+
+static int do_get_managers(void __user *arg)
+{
+    struct ksu_get_managers_cmd cmd;
+
+    if (copy_from_user(&cmd, arg, sizeof(struct ksu_get_managers_cmd))) {
+        return -EFAULT;
+    }
+
+    cmd.count = 0;
+    cmd.total_count = 0;
+
+    if (copy_to_user(arg, &cmd, sizeof(struct ksu_get_managers_cmd))) {
+        return -EFAULT;
+    }
+
+    return 0;
+}
+
+static int do_get_kernel_patch_implement(void __user *arg)
+{
+    struct ksu_get_kernel_patch_implement cmd = { 0 };
+    cmd.type = KERNEL_PATCH_NOT_FOUND;
+
+    if (copy_to_user(arg, &cmd, sizeof(cmd))) {
+        pr_err("get_kernel_patch_implement: copy_to_user failed\n");
+        return -EFAULT;
+    }
+
+    return 0;
+}
+
+
 static int do_set_init_pgrp(void __user *arg)
 {
 	int err;
@@ -718,6 +921,13 @@ static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
 	{ .cmd = KSU_IOCTL_SET_INIT_PGRP, .name = "SET_INIT_PGRP", .handler = do_set_init_pgrp, .perm_check = only_root },
 	{ .cmd = KSU_IOCTL_GET_SULOG_FD, .name = "GET_SULOG_FD", .handler = do_get_sulog_fd, .perm_check = only_root },
 	{ .cmd = KSU_IOCTL_DISABLE_ESCAPE_TO_ROOT, .name = "DISABLE_ESCAPE_TO_ROOT", .handler = do_disable_escape_to_root, .perm_check = only_root },
+	{.cmd = KSU_IOCTL_GET_HOOK_MODE, .name = "GET_HOOK_MODE", .handler = do_get_hook_mode, .perm_check = manager_or_root },
+	{ .cmd = KSU_IOCTL_GET_VERSION_TAG, .name = "GET_VERSION_TAG", .handler = do_get_version_tag, .perm_check = manager_or_root },
+	{ .cmd = KSU_IOCTL_GET_FULL_VERSION, .name = "GET_FULL_VERSION", .handler = do_get_full_version, .perm_check = always_allow },
+	{ .cmd = KSU_IOCTL_HOOK_TYPE, .name = "GET_HOOK_TYPE", .handler = do_get_hook_type, .perm_check = manager_or_root },
+	{ .cmd = KSU_IOCTL_DYNAMIC_MANAGER, .name = "SET_DYNAMIC_MANAGER", .handler = do_dynamic_manager, .perm_check = only_root },
+	{ .cmd = KSU_IOCTL_GET_MANAGERS, .name = "GET_MANAGERS", .handler = do_get_managers, .perm_check = manager_or_root },
+	{ .cmd = KSU_IOCTL_GET_KERNEL_PATCH_IMPLEMENT, .name = "GET_KERNEL_PATCH_IMPLEMENT", .handler = do_get_kernel_patch_implement, .perm_check = manager_or_root },
 	{ .cmd = 0, .name = NULL, .handler = NULL, .perm_check = NULL } // Sentinel
 };
 
