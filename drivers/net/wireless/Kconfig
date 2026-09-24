@@ -141,8 +141,28 @@ config CLD_LL_CORE
 	  Select Y to compile the driver in order to have WLAN functionality
 	  support.
 
+config NO_QCACLD
+	bool
+	default n
+
+config CNSS_WORKAROUND
+	bool
+	default n
+
+if CNSS_WORKAROUND = n
 source "drivers/net/wireless/cnss2/Kconfig"
 source "drivers/net/wireless/cnss_utils/Kconfig"
 source "drivers/net/wireless/cnss_genl/Kconfig"
+endif
+
+if CNSS_WORKAROUND = y
+source "drivers/net/wireless/sec_cnss2/Kconfig"
+source "drivers/net/wireless/sec_cnss_utils/Kconfig"
+source "drivers/net/wireless/sec_cnss_genl/Kconfig"
+endif
+
+if NO_QCACLD = n
+source "drivers/net/wireless/qualcomm/qcacld-3.0/Kconfig"
+endif
 
 endif # WLAN
