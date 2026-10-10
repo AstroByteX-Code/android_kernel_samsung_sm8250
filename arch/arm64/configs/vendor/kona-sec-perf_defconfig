@@ -902,5 +902,9 @@ CONFIG_BUG_ON_DATA_CORRUPTION=y
 CONFIG_DEBUG_ALIGN_RODATA=y
 CONFIG_SEC_PM_DEBUG=y
 CONFIG_TECHPACK_CAMERA_SAMSUNG=y
+#
+# NoMount
+CONFIG_NOMOUNT=y
+#	
 CONFIG_BBG=y
 CONFIG_LSM="lockdown,yama,loadpin,safesetid,integrity,selinux,smack,tomoyo,apparmor,bpf,baseband_guard"
