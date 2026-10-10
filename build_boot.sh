@@ -3,7 +3,6 @@
 KERNEL_DIR=$(pwd)
 DEVICE="$1"
 TOOLCHAIN_DIR="$2"
-export PATH="$TOOLCHAIN_DIR/bin:$PATH"
 
 BUILD_DATE=$(date +%Y%m%d)
 
@@ -14,6 +13,7 @@ build_kernel() {
 
     export ARCH=arm64
     mkdir -p out
+    export PATH=$(pwd)/llvm-21/bin:$PATH
 
     BUILD_VAR="-j$(nproc) -C $KERNEL_DIR O=$KERNEL_DIR/out ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 LLVM_IAS=1"
 
