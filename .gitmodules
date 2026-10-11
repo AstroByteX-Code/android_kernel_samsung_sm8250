@@ -2,8 +2,8 @@
 	path = mkbootimg
 	url = https://android.googlesource.com/platform/system/tools/mkbootimg
 [submodule "KernelSU"]
-	path = KernelSU
-	url = https://github.com/backslashxx/KernelSU
+    path = KernelSU
+    url = https://github.com/AstroByteX-Code/KernelSU
 [submodule "Baseband-guard"]
 	path = Baseband-guard
 	url = https://github.com/vc-teahouse/Baseband-guard
