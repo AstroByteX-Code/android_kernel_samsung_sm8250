@@ -20,6 +20,7 @@
 #include <linux/of_fdt.h>
 #include <linux/version.h>
 #include <linux/platform_device.h>
+#include <linux/io.h>
 
 #include <asm/stacktrace.h>
 #include <asm/system_misc.h>

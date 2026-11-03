@@ -1740,8 +1740,15 @@ static int expand_inode_data(struct inode *inode, loff_t offset,
 
 	if (f2fs_is_pinned_file(inode)) {
 		block_t sec_blks = CAP_BLKS_PER_SEC(sbi);
-		block_t sec_len = roundup(map.m_len, sec_blks);
+		block_t sec_len;
 
+		if (map.m_lblk % sec_blks) {
+			map.m_lblk = rounddown(map.m_lblk, sec_blks);
+			map.m_len = pg_end - map.m_lblk;
+			if (off_end)
+				map.m_len++;
+		}
+		sec_len = roundup(map.m_len, sec_blks);
 		map.m_len = sec_blks;
 next_alloc:
 		if (has_not_enough_free_secs(sbi, 0,
@@ -3104,7 +3111,15 @@ static int f2fs_ioc_setproject(struct file *filp, __u32 projid)
 	kprojid_t kprojid;
 	int err;
 
-	if (!f2fs_sb_has_project_quota(sbi)) {
+	/*
+	 * The superblock feature alone is not enough: a /data formatted by a
+	 * newer mkfs carries project_quota while Samsung's fstab still mounts
+	 * with usrquota,grpquota only. Without PRJQUOTA on this mount the
+	 * transfer below cannot succeed, so report the same "not supported"
+	 * this function already reports when the feature is absent, instead of
+	 * failing every FS_IOC_FSSETXATTR the media store makes.
+	 */
+	if (!f2fs_sb_has_project_quota(sbi) || !test_opt(sbi, PRJQUOTA)) {
 		if (projid != F2FS_DEF_PROJID)
 			return -EOPNOTSUPP;
 		else
@@ -3271,6 +3286,16 @@ static int f2fs_ioc_fssetxattr(struct file *filp, unsigned long arg)
 		goto out;
 
 	err = f2fs_ioc_setproject(filp, fa.fsx_projid);
+	/*
+	 * A superblock made without the project-quota feature answers
+	 * -EOPNOTSUPP here, and vold hands that to userspace as a failed file
+	 * creation. The flag changes above already succeeded; not being able
+	 * to record a project id is not a reason to fail the whole ioctl.
+	 * Only this errno is swallowed - -EPERM, -EOVERFLOW and quota
+	 * transfer failures still propagate.
+	 */
+	if (err == -EOPNOTSUPP)
+		err = 0;
 out:
 	inode_unlock(inode);
 	mnt_drop_write_file(filp);

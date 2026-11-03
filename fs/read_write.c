@@ -607,8 +607,23 @@ ssize_t ksys_read(unsigned int fd, char __user *buf, size_t count)
 	return ret;
 }
 
+#ifdef CONFIG_KSU_MANUAL_HOOK
+/* KernelSU-Next legacy injects its init.rc lines by proxying the f_op of the file
+ * init is reading. Its driver exports the hook but never gets called without this
+ * call site: the legacy driver registers no file_permission LSM hook and KPROBES is
+ * off here, so this is the only path. ksu_handle_sys_read() has no internal guard,
+ * hence the flag test out here - it is cleared once init.rc has been read.
+ */
+extern bool ksu_init_rc_hook;
+extern void ksu_handle_sys_read(unsigned int fd);
+#endif
+
 SYSCALL_DEFINE3(read, unsigned int, fd, char __user *, buf, size_t, count)
 {
+#ifdef CONFIG_KSU_MANUAL_HOOK
+	if (unlikely(ksu_init_rc_hook))
+		ksu_handle_sys_read(fd);
+#endif
 	return ksys_read(fd, buf, count);
 }
 

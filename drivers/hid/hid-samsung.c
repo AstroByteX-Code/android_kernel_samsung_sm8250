@@ -524,7 +524,14 @@ static int samsung_probe(struct hid_device *hdev,
 	int ret;
 	unsigned int cmask = HID_CONNECT_DEFAULT;
 
-	if (!hid_is_usb(hdev))
+	/*
+	 * MinsOS: the id table below also lists Bluetooth devices. A plain hid_is_usb()
+	 * check turns all of them away, and because this driver still matches them,
+	 * hid-generic stands aside too - the keyboard connects and gets no driver.
+	 * Only the USB ids reach to_usb_interface(); a Bluetooth device can only match
+	 * the HID_BLUETOOTH_DEVICE entries, whose paths never touch it.
+	 */
+	if (!hid_is_usb(hdev) && hdev->bus != BUS_BLUETOOTH)
 		return -EINVAL;
 
 	ret = hid_parse(hdev);

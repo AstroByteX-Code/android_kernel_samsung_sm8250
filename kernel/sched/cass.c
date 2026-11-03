@@ -37,6 +37,85 @@ struct cass_cpu_cand {
 	unsigned long util;
 };
 
+#ifndef CONFIG_SCHED_WALT
+/*
+ * MinsOS: sched_boost for CASS. WALT's API, which cpufreq_limit (HMP boost on a
+ * big-cluster min lock), the touch booster, the PDIC booster, the QTI perf HAL
+ * and vendor init all speak, with a CASS-sized effect: while any boost is held,
+ * CFS tasks that already carry a uclamp.min request (top-app: TABoost, 1.2.0)
+ * wake as if that request were above the little cluster's capacity. Nothing
+ * else moves: no core_ctl, no frequency aggregation. FULL_THROTTLE is the same
+ * as CONSERVATIVE on purpose - pushing every task to the big cores is the
+ * "mass task migration" the base tree turned off in 0a56fe3146ad. RESTRAINED
+ * is accepted and does nothing (it only aggregated WALT frequency).
+ */
+#define CASS_BOOST_TYPES	4	/* none, full throttle, conservative, restrained */
+unsigned int sysctl_sched_boost;	/* effective type, as WALT reports it */
+static unsigned int cass_boost_ref[CASS_BOOST_TYPES];
+static bool cass_boost_on __read_mostly;
+static DEFINE_MUTEX(cass_boost_lock);
+
+/* WALT's contract: 0 drops every hold, n takes one of type n, -n releases one. */
+static void cass_boost_update(int type)
+{
+	int i;
+
+	if (!type)
+		memset(cass_boost_ref, 0, sizeof(cass_boost_ref));
+	else if (type > 0)
+		cass_boost_ref[type]++;
+	else if (cass_boost_ref[-type])
+		cass_boost_ref[-type]--;
+
+	sysctl_sched_boost = 0;
+	for (i = 1; i < CASS_BOOST_TYPES; i++) {
+		if (cass_boost_ref[i]) {
+			sysctl_sched_boost = i;
+			break;
+		}
+	}
+	WRITE_ONCE(cass_boost_on, cass_boost_ref[1] || cass_boost_ref[2]);
+}
+
+int sched_set_boost(int type)
+{
+	if (type <= -CASS_BOOST_TYPES || type >= CASS_BOOST_TYPES)
+		return -EINVAL;
+
+	mutex_lock(&cass_boost_lock);
+	cass_boost_update(type);
+	mutex_unlock(&cass_boost_lock);
+	return 0;
+}
+
+int sched_boost_handler(struct ctl_table *table, int write,
+			void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	struct ctl_table t = *table;
+	int ret, val;
+
+	mutex_lock(&cass_boost_lock);
+	val = sysctl_sched_boost;
+	t.data = &val;
+	t.maxlen = sizeof(val);
+	ret = proc_dointvec_minmax(&t, write, buffer, lenp, ppos);
+	if (!ret && write)
+		cass_boost_update(val);
+	mutex_unlock(&cass_boost_lock);
+	return ret;
+}
+
+static __always_inline bool cass_boosted(void)
+{
+	return READ_ONCE(cass_boost_on);
+}
+#else
+static __always_inline bool cass_boosted(void)
+{
+	return false;
+}
+#endif /* !CONFIG_SCHED_WALT */
+
 static __always_inline
 void cass_cpu_util(struct cass_cpu_cand *c, int this_cpu, bool sync)
 {
@@ -171,6 +250,14 @@ static int cass_best_cpu(struct task_struct *p, int prev_cpu, bool sync, bool rt
 	 */
 	p_util = rt ? 0 : task_util_est(p);
 	uc_min = uclamp_eff_value(p, UCLAMP_MIN);
+
+	/*
+	 * MinsOS: a held sched_boost lifts uclamp'd CFS tasks off the little
+	 * cluster. ponytail: CPU 0 is taken as the smallest CPU, true on every
+	 * SM8250 this ROM ships for (same arm64 ordering cass_prime_cpu() uses).
+	 */
+	if (!rt && uc_min && cass_boosted())
+		uc_min = max(uc_min, arch_scale_cpu_capacity(0) + 1);
 
 	/*
 	 * Find the best CPU to wake @p on. Although idle_get_state() requires

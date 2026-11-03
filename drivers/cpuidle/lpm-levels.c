@@ -97,6 +97,19 @@ module_param_named(lpm_prediction, lpm_prediction, bool, 0664);
 static bool lpm_ipi_prediction = true;
 module_param_named(lpm_ipi_prediction, lpm_ipi_prediction, bool, 0664);
 
+/*
+ * Prefer the deepest cluster idle level the constraints allow, instead of the level the sleep-time
+ * prediction guesses is worth it. Ported from Danny Lin's "lpm-levels: Allow enforcing deepest
+ * cluster idle state selection" (as carried in not_samsung.sm8250-4.19), but unlike the original it
+ * does not bypass the constraints: mode_allow, the per-level CPU votes, the PM QoS CPU/DMA latency
+ * request (audio, touch) and the RPM sleep_allowed/suspend checks all still apply. Only the two
+ * residency heuristics are skipped - "would we sleep long enough to pay for this level" and "stop at
+ * the first level whose max residency covers the predicted sleep". Runtime switch for A/B:
+ * /sys/module/lpm_levels/parameters/cluster_use_deepest_state (1 = on, 0 = stock selection).
+ */
+static bool cluster_use_deepest_state = true;
+module_param(cluster_use_deepest_state, bool, 0664);
+
 struct lpm_history {
 	uint32_t resi[MAXSAMPLES];
 	int mode[MAXSAMPLES];
@@ -1078,7 +1091,7 @@ static int cluster_select(struct lpm_cluster *cluster, bool from_idle,
 		if (from_idle && latency_us < pwr_params->exit_latency)
 			break;
 
-		if (sleep_us < (pwr_params->exit_latency +
+		if (!cluster_use_deepest_state && sleep_us < (pwr_params->exit_latency +
 						pwr_params->entry_latency))
 			break;
 
@@ -1094,7 +1107,7 @@ static int cluster_select(struct lpm_cluster *cluster, bool from_idle,
 
 		best_level = i;
 
-		if (from_idle &&
+		if (!cluster_use_deepest_state && from_idle &&
 			(predicted ? (pred_us <= pwr_params->max_residency)
 			: (sleep_us <= pwr_params->max_residency)))
 			break;

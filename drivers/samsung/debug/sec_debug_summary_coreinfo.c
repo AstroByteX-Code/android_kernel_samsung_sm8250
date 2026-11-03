@@ -18,6 +18,7 @@
 
 #include <linux/kernel.h>
 #include <linux/sched.h>
+#include "../../../kernel/sched/sched.h"
 
 #include <asm/stacktrace.h>
 #include <asm/system_misc.h>

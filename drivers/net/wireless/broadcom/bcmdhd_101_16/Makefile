@@ -31,6 +31,13 @@ DHDCFLAGS += -Wall -Werror -Wstrict-prototypes -Dlinux -DLINUX -DBCMDRIVER      
         -DPKT_FILTER_SUPPORT -DEMBEDDED_PLATFORM -DPNO_SUPPORT          \
         -DSEC_ENHANCEMENT
 
+# STATIC_ASSERT() in this driver is the classic negative-array trick, and clang reports
+# it as a variable-length array whenever the asserted expression is not an integer
+# constant expression by its rules (the OFFSETOF comparisons in dhd_pno.c and
+# wl_cfgscan.c). The asserts are doing their job - only the diagnostic is wrong - so the
+# one warning is suppressed rather than -Werror being dropped wholesale.
+DHDCFLAGS += -Wno-vla-extension
+
 DHDCFLAGS += -DOEM_ANDROID
 
 #####################

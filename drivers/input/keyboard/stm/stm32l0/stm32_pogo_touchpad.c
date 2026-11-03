@@ -180,8 +180,8 @@ static void stm32_release_all_finger(struct stm32_touchpad_dev *stm32)
 	stm32->touch_count = 0;
 
 	input_report_key(stm32->input_dev, BTN_TOUCH, 0);
-	input_report_key(stm32->input_dev, BTN_TOOL_FINGER, 0);
 
+	input_mt_report_pointer_emulation(stm32->input_dev, true);
 	input_sync(stm32->input_dev);
 }
 
@@ -569,6 +569,12 @@ out_sync:
 		}
 	}
 
+	/* INPUT_MT_POINTER asks the input core to synthesise the finger-count events
+	 * (BTN_TOOL_FINGER / DOUBLETAP / TRIPLETAP) and the single-touch ABS_X/ABS_Y,
+	 * but only from here. Without this call the device advertises BTN_TOOL_FINGER
+	 * and never reports it, so userspace sees contacts with a finger count of zero.
+	 */
+	input_mt_report_pointer_emulation(stm32->input_dev, true);
 	input_sync(stm32->input_dev);
 }
 

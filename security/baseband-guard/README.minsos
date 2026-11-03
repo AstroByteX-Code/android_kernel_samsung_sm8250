@@ -1,0 +1,17 @@
+Baseband-guard, vendored by MinsOS kernel patch 0036.
+
+Upstream: https://github.com/vc-teahouse/Baseband-guard
+commit a54e0dc6cf0aff4dd87fec49644a02d2eb612905 (2026-07-26), GPL-2.0.
+
+Changed here:
+- Makefile: REPO_LINK and COMMIT_SHA are fixed instead of asked from git, which inside this tree
+  would answer for the kernel repository.
+- baseband_guard.c: loop devices (major 7) are allowed like zram. They are backed by files root can
+  already write, and container tools (Droidspaces, XDA #167) format and check images through them.
+- tracing/tracing.c: a failed lookup of the su, magisk or ksu domain is retried at the next exec
+  instead of being kept. KernelSU-Next adds u:r:ksu:s0 to the policy only after the second-stage
+  init exec, where the first lookup happens, so the kept failure meant no root process was ever marked.
+
+Not taken: setup.sh, sepatch.txt and
+tracing/Makefile. This tree has DEFINE_LSM and LSM blob sharing, so BBG takes its modern path
+(enabled through CONFIG_LSM) and SELinux's objsec.h is not edited.
