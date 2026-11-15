@@ -127,6 +127,28 @@ static int mhi_init_pci_dev(struct mhi_controller *mhi_cntrl)
 	
 	mhi_cntrl->len = len;
 
+	/*
+	 * MinsOS 0043 (I-109, 11-07): after an SDX55 crash, esoc powers the modem on again
+	 * and this runs while the modem is still booting. Until it has, its MSI capability
+	 * offers fewer vectors than msi_required, pci_alloc_irq_vectors() returns -ENOSPC
+	 * (-28), every esoc retry fails the same way and esoc panics the whole tablet
+	 * ("unrecoverable external_modem boot failure"; T976B on 1.3.0-beta3,
+	 * ops/inbox/xda_dm_xerov15_20261107). Give the modem up to 5 s to offer them.
+	 * A normal boot finds them on the first read and does not wait.
+	 */
+	{
+		int waited = 0, nvec = pci_msi_vec_count(pci_dev);
+
+		while (nvec >= 0 && nvec < (int)mhi_cntrl->msi_required && waited < 5000) {
+			msleep(100);
+			waited += 100;
+			nvec = pci_msi_vec_count(pci_dev);
+		}
+		if (waited)
+			MHI_CNTRL_ERR("waited %d ms for %u MSI vectors, device offers %d\n",
+				      waited, mhi_cntrl->msi_required, nvec);
+	}
+
 	ret = pci_alloc_irq_vectors(pci_dev, mhi_cntrl->msi_required,
 				    mhi_cntrl->msi_required, PCI_IRQ_MSI);
 	if (IS_ERR_VALUE((ulong)ret) || ret < mhi_cntrl->msi_required) {
