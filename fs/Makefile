@@ -127,6 +127,7 @@ obj-$(CONFIG_NILFS2_FS)		+= nilfs2/
 obj-$(CONFIG_BEFS_FS)		+= befs/
 obj-$(CONFIG_HOSTFS)		+= hostfs/
 obj-$(CONFIG_CACHEFILES)	+= cachefiles/
+obj-$(CONFIG_SMB_SERVER)	+= ksmbd/
 ifeq ($(CONFIG_DEBUG_FS),y)
 obj-y				+= debugfs/
 else
