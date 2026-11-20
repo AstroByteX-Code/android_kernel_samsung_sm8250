@@ -509,12 +509,17 @@ static void inode_switch_wbs(struct inode *inode, int new_wb_id)
 	if (!isw)
 		goto out_unlock;
 
-	/* find and pin the new wb */
+	atomic_inc(&isw_nr_in_flight);
+
+	/*
+	 * Hold rcu_read_lock across the SB_ACTIVE check, inode grab and
+	 * call_rcu() so cgroup_writeback_umount() can wait for queued switches.
+	 */
 	rcu_read_lock();
+	/* find and pin the new wb */
 	memcg_css = css_from_id(new_wb_id, &memory_cgrp_subsys);
 	if (memcg_css && !css_tryget(memcg_css))
 		memcg_css = NULL;
-	rcu_read_unlock();
 	if (!memcg_css)
 		goto out_free;
 
@@ -544,12 +549,13 @@ static void inode_switch_wbs(struct inode *inode, int new_wb_id)
 	 * Let's continue after I_WB_SWITCH is guaranteed to be visible.
 	 */
 	call_rcu(&isw->rcu_head, inode_switch_wbs_rcu_fn);
-
-	atomic_inc(&isw_nr_in_flight);
+	rcu_read_unlock();
 
 	goto out_unlock;
 
 out_free:
+	rcu_read_unlock();
+	atomic_dec(&isw_nr_in_flight);
 	if (isw->new_wb)
 		wb_put(isw->new_wb);
 	kfree(isw);

@@ -1545,7 +1545,7 @@ static int ecryptfs_read_headers_virt(char *page_virt,
 	}
 #endif
 	rc = ecryptfs_parse_packet_set(crypt_stat, (page_virt + offset),
-				       ecryptfs_dentry);
+				       PAGE_SIZE - offset, ecryptfs_dentry);
 out:
 	return rc;
 }

@@ -864,12 +864,13 @@ struct bpf_array_aux {
 	/* 'Ownership' of prog array is claimed by the first program that
 	 * is going to use this map or by the first program which FD is
 	 * stored in the map to make sure that all callers and callees have
-	 * the same prog type and JITed flag.
+	 * the same prog type, attach type, and JITed flag.
 	 */
 	struct {
 		spinlock_t lock;
 		enum bpf_prog_type type;
 		bool jited;
+		enum bpf_attach_type attach_type;
 	} owner;
 	/* Programs with direct jumps into programs part of this array. */
 	struct list_head poke_progs;
