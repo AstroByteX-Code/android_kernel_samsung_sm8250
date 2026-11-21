@@ -123,6 +123,8 @@ struct stm32_touchpad_dtdata {
 	bool xy_switch;
 	bool x_invert;
 	bool y_invert;
+	int res_x;
+	int res_y;
 };
 
 struct stm32_touchpad_dev {
@@ -605,6 +607,16 @@ static int stm32_parse_dt(struct device *dev,
 		device_data->dtdata->xy_switch = temp[2];
 	}
 
+	/* Optional units per mm along the panel x and y (before the xy switch). Without it the
+	 * touchpad reports resolution 0 and the Android touchpad stack assumes 32 units/mm.
+	 */
+	memset(temp, 0x00, sizeof(temp));
+	ret = of_property_read_u32_array(np, "touchpad,resolution", temp, 2);
+	if (!ret) {
+		device_data->dtdata->res_x = temp[0];
+		device_data->dtdata->res_y = temp[1];
+	}
+
 	input_info(true, &device_data->pdev->dev, "max_x:%d, max_y:%d, invert:%d,%d, switch:%d\n",
 			device_data->dtdata->max_x, device_data->dtdata->max_y,
 			device_data->dtdata->x_invert, device_data->dtdata->y_invert,
@@ -657,6 +669,16 @@ static int stm32_touchpad_set_input_dev(struct stm32_touchpad_dev *device_data)
 				0, device_data->dtdata->max_x - 1, 0, 0);
 		input_set_abs_params(input_dev, ABS_MT_POSITION_Y,
 				0, device_data->dtdata->max_y - 1, 0, 0);
+	}
+	if (device_data->dtdata->res_x && device_data->dtdata->res_y) {
+		/* As in Samsung's later pogo touchpad driver: resolution = logical / physical mm. */
+		if (device_data->dtdata->xy_switch) {
+			input_abs_set_res(input_dev, ABS_MT_POSITION_X, device_data->dtdata->res_y);
+			input_abs_set_res(input_dev, ABS_MT_POSITION_Y, device_data->dtdata->res_x);
+		} else {
+			input_abs_set_res(input_dev, ABS_MT_POSITION_X, device_data->dtdata->res_x);
+			input_abs_set_res(input_dev, ABS_MT_POSITION_Y, device_data->dtdata->res_y);
+		}
 	}
 	input_set_abs_params(input_dev, ABS_MT_TOUCH_MAJOR, 0, 255, 0, 0);
 	input_mt_init_slots(input_dev, STM32_TOUCH_MAX_FINGER_NUM, INPUT_MT_POINTER);

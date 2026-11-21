@@ -38,6 +38,7 @@
 		compatible = "stm,touchpad";
 		touchpad,max_coords = <2560 1600>;	/* x y */
 		touchpad,invert = <0 1 1>; /* x invert, y invert, xy switch */
+		touchpad,resolution = <26 30>; /* EF-DT970 pad 100 x 53 mm (owner, 11-18): 2560/100, 1600/53 */
 	};
 
 	pogo_kpd {

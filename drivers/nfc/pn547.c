@@ -1657,6 +1657,39 @@ static ssize_t nfc_support_show(struct class *class,
 
 static CLASS_ATTR_RO(nfc_support);
 
+/*
+ * MinsOS 0041 (11-04): one dtbo serves the Korean, Hong Kong and Japanese S20 and S20+. Board-ids 13
+ * and 14 exist in every region, so a Japanese unit on those boards gets the KOR overlay, which now
+ * carries both pn547@2B (NXP SN100U, Korea and Hong Kong) and sec-nfc@27 (Samsung SENN82AB, Japan) on
+ * the same GPIOs. The kernel command line has no model, so the sales code decides: KDI (au) and DCM
+ * (docomo) units have the Samsung chip. This only matters when both nodes are in the tree - a JPN
+ * overlay (board-id 15, the development boards) deletes pn547@2B and is left as it is.
+ */
+static bool minsos_nfc_node(const char *compat)
+{
+	struct device_node *np = of_find_compatible_node(NULL, NULL, compat);
+	bool avail = np && of_device_is_available(np);
+
+	of_node_put(np);
+	return avail;
+}
+
+static bool minsos_nfc_jpn_sales(void)
+{
+	static const char * const codes[] = { "KDI", "DCM" };
+	const char *key = "androidboot.sales_code=";
+	const char *p = strstr(saved_command_line, key);
+	int i;
+
+	if (!p)
+		return false;
+	p += strlen(key);
+	for (i = 0; i < ARRAY_SIZE(codes); i++)
+		if (!strncmp(p, codes[i], 3) && (p[3] == ' ' || p[3] == '\0'))
+			return true;
+	return false;
+}
+
 static int pn547_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
 	int ret;
@@ -1674,6 +1707,11 @@ static int pn547_probe(struct i2c_client *client, const struct i2c_device_id *id
 	NFC_LOG_ERR("[error] ese support but not secured? check!!\n");
 	return -ENODEV;
 #endif
+
+	if (minsos_nfc_node("sec-nfc") && minsos_nfc_jpn_sales()) {
+		pr_info("pn547: Samsung NFC unit (sales code), leaving the bus to sec-nfc\n");
+		return -ENODEV;
+	}
 
 	NFC_LOG_INFO("entered\n");
 

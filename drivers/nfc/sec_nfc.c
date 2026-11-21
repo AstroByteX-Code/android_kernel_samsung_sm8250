@@ -43,6 +43,8 @@
 #include <linux/poll.h>
 #include <linux/sched.h>
 #include <linux/i2c.h>
+#include <linux/init.h>
+#include <linux/of.h>
 #include "sec_nfc.h"
 #include "./nfc_logger/nfc_logger.h"
 
@@ -1052,6 +1054,39 @@ MODULE_DEVICE_TABLE(i2c, sec_nfc_id_table);
 #define SEC_NFC_INIT(driver)	i2c_add_driver(driver)
 #define SEC_NFC_EXIT(driver)	i2c_del_driver(driver)
 
+/*
+ * MinsOS 0041 (11-04): one dtbo serves the Korean, Hong Kong and Japanese S20 and S20+. Board-ids 13
+ * and 14 exist in every region, so a Japanese unit on those boards gets the KOR overlay, which now
+ * carries both pn547@2B (NXP SN100U, Korea and Hong Kong) and sec-nfc@27 (Samsung SENN82AB, Japan) on
+ * the same GPIOs. The kernel command line has no model, so the sales code decides: KDI (au) and DCM
+ * (docomo) units have the Samsung chip. This only matters when both nodes are in the tree - a JPN
+ * overlay (board-id 15, the development boards) deletes pn547@2B and is left as it is.
+ */
+static bool minsos_nfc_node(const char *compat)
+{
+	struct device_node *np = of_find_compatible_node(NULL, NULL, compat);
+	bool avail = np && of_device_is_available(np);
+
+	of_node_put(np);
+	return avail;
+}
+
+static bool minsos_nfc_jpn_sales(void)
+{
+	static const char * const codes[] = { "KDI", "DCM" };
+	const char *key = "androidboot.sales_code=";
+	const char *p = strstr(saved_command_line, key);
+	int i;
+
+	if (!p)
+		return false;
+	p += strlen(key);
+	for (i = 0; i < ARRAY_SIZE(codes); i++)
+		if (!strncmp(p, codes[i], 3) && (p[3] == ' ' || p[3] == '\0'))
+			return true;
+	return false;
+}
+
 static int sec_nfc_probe(struct i2c_client *client,
 		const struct i2c_device_id *id)
 {
@@ -1062,6 +1097,11 @@ static int sec_nfc_probe(struct i2c_client *client,
 	pr_err("[error] ese support but not secured? check!!\n");
 	return -ENODEV;
 #endif
+
+	if (minsos_nfc_node("pn547") && !minsos_nfc_jpn_sales()) {
+		pr_info("sec-nfc: NXP NFC unit, leaving the bus to pn547\n");
+		return -ENODEV;
+	}
 
 	nfc_logger_init();
 

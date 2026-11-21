@@ -34,3 +34,21 @@
 		};
 	};
 };
+
+/* MinsOS 0041: the Samsung NFC of the Japanese units (felica_x1q_r10.dtsi), which share this board-id
+ * with Korea and so get this overlay. Same GPIOs as pn547@2B; pn547.c and sec_nfc.c pick one by sales
+ * code. No pinctrl: the JPN dtsi's qupv3_se16_spi_nc would park the eSE SPI pins of a Korean unit.
+ */
+&qupv3_se15_i2c {
+	sec-nfc@27 {
+		compatible = "sec-nfc";
+		reg = <0x27>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <31 0>;
+		sec-nfc,irq-gpio = <&tlmm 31 0>;
+		sec-nfc,ven-gpio = <&tlmm 8 0>;
+		sec-nfc,firm-gpio = <&tlmm 9 0>;
+		sec-nfc,nfc_pvdd-supply = <&pm8150a_l1>;
+		sec-nfc,ldo_control;
+	};
+};
