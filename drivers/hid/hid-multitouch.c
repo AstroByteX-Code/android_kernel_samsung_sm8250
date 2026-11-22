@@ -345,6 +345,7 @@ static const struct mt_class mt_classes[] = {
 	{ .name = MT_CLS_VTL,
 		.quirks = MT_QUIRK_ALWAYS_VALID |
 			MT_QUIRK_CONTACT_CNT_ACCURATE |
+			MT_QUIRK_STICKY_FINGERS |
 			MT_QUIRK_FORCE_GET_FEATURE,
 	},
 	{ .name = MT_CLS_GOOGLE,
@@ -440,9 +441,8 @@ static void mt_get_feature(struct hid_device *hdev, struct hid_report *report)
 	} else {
 		rep_enum = &hdev->report_enum[HID_FEATURE_REPORT];
 		if (rep_enum->numbered && report->id != buf[0]) {
-			dev_warn(&hdev->dev, "Invalid reportID received, expected %d got %d\n", report->id, buf[0]);
-			kfree(buf);
-			return;
+			hid_err(hdev, "Returned feature report did not match the request\n");
+			goto free;
 		}
 
 		ret = hid_report_raw_event(hdev, HID_FEATURE_REPORT, buf,
@@ -451,6 +451,7 @@ static void mt_get_feature(struct hid_device *hdev, struct hid_report *report)
 			dev_warn(&hdev->dev, "failed to report feature\n");
 	}
 
+free:
 	kfree(buf);
 }
 
@@ -1935,6 +1936,9 @@ static const struct hid_device_id mt_devices[] = {
 	{ .driver_data = MT_CLS_EGALAX_SERIAL,
 		MT_USB_DEVICE(USB_VENDOR_ID_DWAV,
 			USB_DEVICE_ID_DWAV_EGALAX_MULTITOUCH_A001) },
+	{ .driver_data = MT_CLS_EGALAX_SERIAL,
+		MT_USB_DEVICE(USB_VENDOR_ID_DWAV,
+			USB_DEVICE_ID_DWAV_EGALAX_MULTITOUCH_C000) },
 	{ .driver_data = MT_CLS_EGALAX,
 		MT_USB_DEVICE(USB_VENDOR_ID_DWAV,
 			USB_DEVICE_ID_DWAV_EGALAX_MULTITOUCH_C002) },

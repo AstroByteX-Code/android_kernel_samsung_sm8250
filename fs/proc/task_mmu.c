@@ -634,7 +634,7 @@ static void smaps_pte_entry(pte_t *pte, unsigned long addr,
 		if (!page)
 			return;
 
-		if (radix_tree_exceptional_entry(page))
+		if (xa_is_value(page))
 			mss->swap += PAGE_SIZE;
 		else
 			put_page(page);
@@ -1768,7 +1768,7 @@ int reclaim_address_space(struct address_space *mapping,
 			continue;
 		}
 
-		if (radix_tree_exceptional_entry(page))
+		if (xa_is_value(page))
 			continue;
 
 		if (isolate_lru_page(page))
@@ -1818,7 +1818,7 @@ static int reclaim_pte_range(pmd_t *pmd, unsigned long addr,
 	if (pmd_trans_unstable(pmd) || !rp->nr_to_reclaim)
 		return 0;
 cont:
-	if (rwsem_is_contended(&walk->mm->mmap_sem))
+	if (mmap_lock_is_contended(walk->mm))
 		return -1;
 	if (is_pm_freezing())
 		return -1;
@@ -1896,7 +1896,7 @@ static int writeback_pte_range(pmd_t *pmd, unsigned long addr,
 
 	if (pmd_trans_unstable(pmd))
 		return 0;
-	if (rwsem_is_contended(&mm->mmap_sem))
+	if (mmap_lock_is_contended(mm))
 		return -1;
 	if (is_pm_freezing())
 		return -1;

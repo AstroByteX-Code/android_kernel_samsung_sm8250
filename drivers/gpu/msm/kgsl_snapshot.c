@@ -1174,7 +1174,6 @@ int kgsl_device_snapshot_init(struct kgsl_device *device)
 		return ret;
 
 	ret = sysfs_create_files(&device->snapshot_kobj, snapshot_attrs);
-
 	return ret;
 }
 EXPORT_SYMBOL(kgsl_device_snapshot_init);

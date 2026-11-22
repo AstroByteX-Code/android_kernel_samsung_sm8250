@@ -223,6 +223,12 @@ static int rouleur_parse_port_mapping(struct device *dev,
 
 	for (i = 0; i < map_length; i++) {
 		port_num = dt_array[NUM_SWRS_DT_PARAMS * i];
+		if (port_num >= MAX_PORT) {
+			dev_err(dev, "%s: Invalid port or channel number\n", __func__);
+			ret = -EINVAL;
+			goto err_pdata_fail;
+		}
+
 		slave_port_type = dt_array[NUM_SWRS_DT_PARAMS * i + 1];
 		ch_mask = dt_array[NUM_SWRS_DT_PARAMS * i + 2];
 		ch_rate = dt_array[NUM_SWRS_DT_PARAMS * i + 3];
@@ -230,6 +236,12 @@ static int rouleur_parse_port_mapping(struct device *dev,
 
 		if (port_num != old_port_num)
 			ch_iter = 0;
+
+		if (ch_iter >= MAX_CH_PER_PORT) {
+			dev_err(dev, "%s: Invalid port or channel number\n", __func__);
+			ret = -EINVAL;
+			goto err_pdata_fail;
+		}
 
 		(*map)[port_num][ch_iter].slave_port_type = slave_port_type;
 		(*map)[port_num][ch_iter].ch_mask = ch_mask;

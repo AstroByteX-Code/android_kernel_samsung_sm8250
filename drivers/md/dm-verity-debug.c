@@ -260,6 +260,7 @@ int verity_handle_err_hex_debug(struct dm_verity *v, enum verity_block_type type
     u8 *page;
 
     int i;
+    int ce;
     char hex_str[65] = {0, };
     /* Corruption should be visible in device status in all modes */
     v->hash_failed = 1;
@@ -270,10 +271,11 @@ int verity_handle_err_hex_debug(struct dm_verity *v, enum verity_block_type type
         return 0;
     }
 
-    if (v->corrupted_errs >= DM_VERITY_MAX_CORRUPTED_ERRS)
-        goto out;
-
-    v->corrupted_errs++;
+    ce = atomic_read(&v->corrupted_errs);
+    do {
+        if (ce >= DM_VERITY_MAX_CORRUPTED_ERRS)
+            goto out;
+    } while (!atomic_try_cmpxchg(&v->corrupted_errs, &ce, ce + 1));
 
     switch (type) {
         case DM_VERITY_BLOCK_TYPE_DATA:
@@ -319,7 +321,7 @@ int verity_handle_err_hex_debug(struct dm_verity *v, enum verity_block_type type
 
     panic("dmv corrupt");
 
-    if (v->corrupted_errs == DM_VERITY_MAX_CORRUPTED_ERRS)
+    if (ce + 1 == DM_VERITY_MAX_CORRUPTED_ERRS)
         DMERR("%s: reached maximum errors", v->data_dev->name);
 
     snprintf(verity_env, DM_VERITY_ENV_LENGTH, "%s=%d,%llu",

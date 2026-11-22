@@ -395,9 +395,9 @@ static int vti4_err(struct sk_buff *skb, u32 info)
 		return 0;
 
 	if (icmp_hdr(skb)->type == ICMP_DEST_UNREACH)
-		ipv4_update_pmtu(skb, net, info, 0, 0, protocol, 0);
+		ipv4_update_pmtu(skb, net, info, 0, protocol);
 	else
-		ipv4_redirect(skb, net, 0, 0, protocol, 0);
+		ipv4_redirect(skb, net, 0, protocol);
 	xfrm_state_put(x);
 
 	return 0;
@@ -588,6 +588,9 @@ static int vti_changelink(struct net_device *dev, struct nlattr *tb[],
 	struct ip_tunnel *t = netdev_priv(dev);
 	__u32 fwmark = t->fwmark;
 	struct ip_tunnel_parm p;
+
+	if (!rtnl_dev_link_net_capable(dev, t->net))
+		return -EPERM;
 
 	vti_netlink_parms(data, &p, &fwmark);
 	return ip_tunnel_changelink(dev, tb, &p, fwmark);

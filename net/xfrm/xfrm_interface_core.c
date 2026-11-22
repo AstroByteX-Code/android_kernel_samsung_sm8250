@@ -454,9 +454,9 @@ static int xfrmi4_err(struct sk_buff *skb, u32 info)
 	}
 
 	if (icmp_hdr(skb)->type == ICMP_DEST_UNREACH)
-		ipv4_update_pmtu(skb, net, info, 0, 0, protocol, 0);
+		ipv4_update_pmtu(skb, net, info, 0, protocol);
 	else
-		ipv4_redirect(skb, net, 0, 0, protocol, 0);
+		ipv4_redirect(skb, net, 0, protocol);
 	xfrm_state_put(x);
 
 	return 0;
@@ -700,6 +700,9 @@ static int xfrmi_changelink(struct net_device *dev, struct nlattr *tb[],
 	struct xfrm_if *xi = netdev_priv(dev);
 	struct net *net = xi->net;
 	struct xfrm_if_parms p = {};
+
+	if (!rtnl_dev_link_net_capable(dev, net))
+		return -EPERM;
 
 	xfrmi_netlink_parms(data, &p);
 	if (!p.if_id) {

@@ -809,18 +809,23 @@ static void __tipc_node_link_down(struct tipc_node *n, int *bearer_id,
 
 static void tipc_node_link_down(struct tipc_node *n, int bearer_id, bool delete)
 {
-	struct tipc_link_entry *le = &n->links[bearer_id];
 	struct tipc_media_addr *maddr = NULL;
-	struct tipc_link *l = le->link;
 	int old_bearer_id = bearer_id;
+	struct tipc_link_entry *le;
 	struct sk_buff_head xmitq;
-
-	if (!l)
-		return;
+	struct tipc_link *l;
 
 	__skb_queue_head_init(&xmitq);
 
+	/* Synchronize the link lookup with bearer teardown. */
 	tipc_node_write_lock(n);
+	le = &n->links[bearer_id];
+	l = le->link;
+	if (!l) {
+		tipc_node_write_unlock_fast(n);
+		return;
+	}
+
 	if (!tipc_link_is_establishing(l)) {
 		__tipc_node_link_down(n, &bearer_id, &xmitq, &maddr);
 		if (delete) {
@@ -1326,7 +1331,7 @@ static int __tipc_nl_add_node(struct tipc_nl_msg *msg, struct tipc_node *node)
 	if (!hdr)
 		return -EMSGSIZE;
 
-	attrs = nla_nest_start(msg->skb, TIPC_NLA_NODE);
+	attrs = nla_nest_start_noflag(msg->skb, TIPC_NLA_NODE);
 	if (!attrs)
 		goto msg_full;
 
@@ -1840,9 +1845,9 @@ int tipc_nl_peer_rm(struct sk_buff *skb, struct genl_info *info)
 	if (!info->attrs[TIPC_NLA_NET])
 		return -EINVAL;
 
-	err = nla_parse_nested(attrs, TIPC_NLA_NET_MAX,
-			       info->attrs[TIPC_NLA_NET], tipc_nl_net_policy,
-			       info->extack);
+	err = nla_parse_nested_deprecated(attrs, TIPC_NLA_NET_MAX,
+					  info->attrs[TIPC_NLA_NET],
+					  tipc_nl_net_policy, info->extack);
 	if (err)
 		return err;
 
@@ -1998,9 +2003,9 @@ int tipc_nl_node_set_link(struct sk_buff *skb, struct genl_info *info)
 	if (!info->attrs[TIPC_NLA_LINK])
 		return -EINVAL;
 
-	err = nla_parse_nested(attrs, TIPC_NLA_LINK_MAX,
-			       info->attrs[TIPC_NLA_LINK],
-			       tipc_nl_link_policy, info->extack);
+	err = nla_parse_nested_deprecated(attrs, TIPC_NLA_LINK_MAX,
+					  info->attrs[TIPC_NLA_LINK],
+					  tipc_nl_link_policy, info->extack);
 	if (err)
 		return err;
 
@@ -2074,9 +2079,9 @@ int tipc_nl_node_get_link(struct sk_buff *skb, struct genl_info *info)
 	if (!info->attrs[TIPC_NLA_LINK])
 		return -EINVAL;
 
-	err = nla_parse_nested(attrs, TIPC_NLA_LINK_MAX,
-			       info->attrs[TIPC_NLA_LINK],
-			       tipc_nl_link_policy, info->extack);
+	err = nla_parse_nested_deprecated(attrs, TIPC_NLA_LINK_MAX,
+					  info->attrs[TIPC_NLA_LINK],
+					  tipc_nl_link_policy, info->extack);
 	if (err)
 		return err;
 
@@ -2139,9 +2144,9 @@ int tipc_nl_node_reset_link_stats(struct sk_buff *skb, struct genl_info *info)
 	if (!info->attrs[TIPC_NLA_LINK])
 		return -EINVAL;
 
-	err = nla_parse_nested(attrs, TIPC_NLA_LINK_MAX,
-			       info->attrs[TIPC_NLA_LINK],
-			       tipc_nl_link_policy, info->extack);
+	err = nla_parse_nested_deprecated(attrs, TIPC_NLA_LINK_MAX,
+					  info->attrs[TIPC_NLA_LINK],
+					  tipc_nl_link_policy, info->extack);
 	if (err)
 		return err;
 
@@ -2279,9 +2284,10 @@ int tipc_nl_node_set_monitor(struct sk_buff *skb, struct genl_info *info)
 	if (!info->attrs[TIPC_NLA_MON])
 		return -EINVAL;
 
-	err = nla_parse_nested(attrs, TIPC_NLA_MON_MAX,
-			       info->attrs[TIPC_NLA_MON],
-			       tipc_nl_monitor_policy, info->extack);
+	err = nla_parse_nested_deprecated(attrs, TIPC_NLA_MON_MAX,
+					  info->attrs[TIPC_NLA_MON],
+					  tipc_nl_monitor_policy,
+					  info->extack);
 	if (err)
 		return err;
 
@@ -2308,7 +2314,7 @@ static int __tipc_nl_add_monitor_prop(struct net *net, struct tipc_nl_msg *msg)
 	if (!hdr)
 		return -EMSGSIZE;
 
-	attrs = nla_nest_start(msg->skb, TIPC_NLA_MON);
+	attrs = nla_nest_start_noflag(msg->skb, TIPC_NLA_MON);
 	if (!attrs)
 		goto msg_full;
 
@@ -2399,9 +2405,10 @@ int tipc_nl_node_dump_monitor_peer(struct sk_buff *skb,
 		if (!attrs[TIPC_NLA_MON])
 			return -EINVAL;
 
-		err = nla_parse_nested(mon, TIPC_NLA_MON_MAX,
-				       attrs[TIPC_NLA_MON],
-				       tipc_nl_monitor_policy, NULL);
+		err = nla_parse_nested_deprecated(mon, TIPC_NLA_MON_MAX,
+						  attrs[TIPC_NLA_MON],
+						  tipc_nl_monitor_policy,
+						  NULL);
 		if (err)
 			return err;
 

@@ -24,6 +24,7 @@
 #include <linux/device.h>
 #include <linux/genhd.h>
 #include <linux/highmem.h>
+#include <linux/memcontrol.h>
 #include <linux/slab.h>
 #include <linux/backing-dev.h>
 #include <linux/string.h>
@@ -54,7 +55,6 @@ static DEFINE_IDR(zram_index_idr);
 static DEFINE_MUTEX(zram_index_mutex);
 
 static int zram_major;
-
 #ifdef CONFIG_CRYPTO_LZ4
 static const char *default_compressor = "lz4";
 #else
@@ -2774,6 +2774,10 @@ static int __zram_bvec_write(struct zram *zram, struct bio_vec *bvec,
 	enum zram_pageflags flags = 0;
 #ifdef CONFIG_ZRAM_LRU_WRITEBACK
 	unsigned long irq_flags;
+	bool add_to_lru;
+#ifdef CONFIG_MEMCG
+	struct mem_cgroup *memcg;
+#endif
 #endif
 
 	mem = kmap_atomic(page);
@@ -2879,11 +2883,18 @@ out:
 		zram_set_flag(zram, index, flags);
 		zram_set_element(zram, index, element);
 	}  else {
+#ifdef CONFIG_ZRAM_LRU_WRITEBACK
+		add_to_lru = true;
+#ifdef CONFIG_MEMCG
+		memcg = page_memcg_check(page);
+		add_to_lru = !memcg ||
+			memcg->swappiness != NON_LRU_SWAPPINESS;
+#endif
+#endif
 		zram_set_entry(zram, index, entry);
 		zram_set_obj_size(zram, index, comp_len);
 #ifdef CONFIG_ZRAM_LRU_WRITEBACK
-		if (!page->mem_cgroup ||
-		    page->mem_cgroup->swappiness != NON_LRU_SWAPPINESS) {
+		if (add_to_lru) {
 			spin_lock_irqsave(&zram->list_lock, irq_flags);
 			list_add_tail(&zram->table[index].lru_list, &zram->list);
 			spin_unlock_irqrestore(&zram->list_lock, irq_flags);

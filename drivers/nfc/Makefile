@@ -29,3 +29,4 @@ obj-$(CONFIG_SEC_NFC_V2)	+= sec_nfc_v2.o
 obj-$(CONFIG_ESE_P3_LSI)    += ese_p3.o
 obj-$(CONFIG_ESE_P3_V2_LSI)    += ese_p3_v2.o
 obj-y                       += nfc_logger/
+obj-$(CONFIG_NXP_NFC_I2C)	+= sn-nci/
